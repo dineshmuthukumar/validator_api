@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const _ = require("lodash");
 const Joi = require("joi");
 
-const Admin = require("../../models/admin");
+const { Admin } = require('../../models/admin');
 const helper = require("./../../services/helper");
 
 exports.register = async (req, res) => {
@@ -14,7 +14,7 @@ exports.register = async (req, res) => {
         name: Joi.string().required().label("Name"),
         email: Joi.string().required().label("Email"),
         password: Joi.string().required().min(6).label("Password"),
-        confirm_password: Joi.string()
+        confirmPassword: Joi.string()
           .required()
           .valid(Joi.ref("password"))
           .label("Confirm Password"),
@@ -115,11 +115,8 @@ exports.login = async (req, res) => {
     if (user && (await bcrypt.compare(password, user.password))) {
       let payload = _.pick(user, [
         "_id",
-        "first_name",
-        "last_name",
+        "name",
         "email",
-        "mobile_number",
-        "user_status",
       ]);
 
       // Create token

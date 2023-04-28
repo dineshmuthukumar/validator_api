@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const _ = require("lodash");
 const Joi = require("joi");
 
-const { User } = require('../../models/user');
+const { Provider } = require('../../models/provider');
 const helper = require('./../../services/helper');
 
 exports.register = async (req, res) => {
@@ -38,11 +38,14 @@ exports.register = async (req, res) => {
                 .json(helper.response({ status: 422, error: errors }));
 
         // Get user input
-        const { firstName, lastName, email, password, mobileNumber, deviceType, deviceToken, deviceId } = req.body;
+        const { firstName, lastName, email, password, mobileNumber, 
+            deviceType, deviceToken, deviceId, 
+            taxiNumber, taxiType,  wheelChair,
+            pets, parcel, parcelType, food, } = req.body;
 
         // check if user already exist
         // Validate if user exist in our database
-        const oldUser = await User.findOne({ email });
+        const oldUser = await Provider.findOne({ email });
 
         if (oldUser) {
             return res.status(409).json(helper.response({ status: 422, error: "Email Already Exists" }));
@@ -51,17 +54,33 @@ exports.register = async (req, res) => {
         //Encrypt user password
         encryptedPassword = await bcrypt.hash(password, 10);
 
-        // Create user in our database
-        const user = await User.create({
-            firstName,
-            lastName,
+        const providerData = {
+            firstName: firstName,
+            lastName: lastName,
             email: email.toLowerCase(), // sanitize: convert email to lowercase
             mobileNumber: mobileNumber,
             password: encryptedPassword,
+
+            taxiNumber: taxiNumber,
+            taxiType: taxiType,
+            wheelChair: wheelChair,
+            pets: pets,
+            parcel: parcel,
+            parcelType: parcelType,
+            food: food,
+
             deviceId: deviceId,
             deviceToken: deviceToken,
             deviceType: deviceType
-        });
+        }
+
+        if (req.files['taxiImageFront']) providerData.taxiImageFront = req.protocol + '://' + req.get('host') + "/storage/provider/document/" + req.files['taxiImageFront'][0].filename;
+        if (req.files['taxiImageBack']) providerData.taxiImageBack = req.protocol + '://' + req.get('host') + "/storage/provider/document/" + req.files['taxiImageBack'][0].filename;
+        if (req.files['taxiImageIn']) providerData.taxiImageIn = req.protocol + '://' + req.get('host') + "/storage/provider/document/" + req.files['taxiImageIn'][0].filename;
+        if (req.files['driverLicense']) providerData.driverLicense = req.protocol + '://' + req.get('host') + "/storage/provider/document/" + req.files['driverLicense'][0].filename;
+
+        // Create Provider in our database
+        const user = await Provider.create(providerData);
 
         // Create token
         let payload = _.pick(user, ["_id", "firstName", "lastName", "email", "mobileNumber", "status"]);
@@ -72,6 +91,7 @@ exports.register = async (req, res) => {
 
         // return new user
         res.status(201).json(user);
+        // res.status(201).json(['req', req.files]);
     } catch (err) {
         console.log(err, 'catch')
         if (err[0] != undefined) {
@@ -116,10 +136,10 @@ exports.login = async (req, res) => {
             res.status(400).send("All input is required");
         }
         // Validate if user exist in our database
-        const user = await User.findOne({ email });
+        const user = await Provider.findOne({ email });
 
         if (user && (await bcrypt.compare(password, user.password))) {
-        let payload = _.pick(user, ["_id", "firstName", "lastName", "email", "mobileNumber", "status"]);
+            let payload = _.pick(user, ["_id", "firstName", "lastName", "email", "mobileNumber", "status"]);
 
             // Create token
             const token = user.generateAuthToken(payload);
@@ -147,7 +167,7 @@ exports.login = async (req, res) => {
 
 exports.getProfile = async (req, res) => {
     try {
-        let userData = await User.findOne({ _id: req.user._id });
+        let userData = await Provider.findOne({ _id: req.user._id });
         const data = userData;
         const response = helper.response({
             message: "Profile Fetched Successcully",
