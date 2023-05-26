@@ -1,167 +1,71 @@
-const bcrypt = require('bcryptjs');
-const jwt = require("jsonwebtoken");
 const _ = require("lodash");
 const Joi = require("joi");
 
-const { User } = require('../../models/user');
-const helper = require('./../../services/helper');
+const { User } = require("../../models/user");
+const helper = require("./../../services/helper");
+const db = require("../../services/model.js");
 
-exports.register = async (req, res) => {
-    try {
-        const schema = Joi.object()
-            .options({ abortEarly: false })
-            .keys({
-                firstName: Joi.string().required().label("First Name"),
-                lastName: Joi.string().required().label("Last Name"),
-                email: Joi.string().required().label("Email"),
-                mobileNumber: Joi.string().required().min(6).label("Mobile Number"),
-                password: Joi.string().required().min(6).label("Password"),
-                confirmPassword: Joi.string()
-                    .required()
-                    .valid(Joi.ref("password"))
-                    .label("Confirm Password"),
-            })
-            .unknown(true);
+exports.save = async (req, res) => {
+  try {
+    const schema = Joi.object()
+      .options({ abortEarly: false })
+      .keys({
+        input: Joi.string().required().label("input"),
+        result: Joi.number().required().label("result"),
+      })
+      .unknown(true);
 
-        const { error } = schema.validate(req.body);
-        const errors = {};
-        if (error) {
-            console.log(error.details);
-            for (let err of error.details) {
-                errors[err.path[0]] = err.message.replace(/"/g, "");
-            }
-        }
-
-        if (error)
-            return res
-                .status(422)
-                .json(helper.response({ status: 422, error: errors }));
-
-        // Get user input
-        const { firstName, lastName, email, password, mobileNumber, deviceType, deviceToken, deviceId } = req.body;
-
-        // check if user already exist
-        // Validate if user exist in our database
-        const oldUser = await User.findOne({ email });
-
-        if (oldUser) {
-            return res.status(409).json(helper.response({ status: 422, error: "Email Already Exists" }));
-        }
-
-        //Encrypt user password
-        encryptedPassword = await bcrypt.hash(password, 10);
-
-        // Create user in our database
-        const user = await User.create({
-            firstName,
-            lastName,
-            email: email.toLowerCase(), // sanitize: convert email to lowercase
-            mobileNumber: mobileNumber,
-            password: encryptedPassword,
-            deviceId: deviceId,
-            deviceToken: deviceToken,
-            deviceType: deviceType
-        });
-
-        // Create token
-        let payload = _.pick(user, ["_id", "firstName", "lastName", "email", "mobileNumber", "status"]);
-        const token = user.generateAuthToken(payload);
-
-        // save user token
-        user.token = token;
-
-        // return new user
-        res.status(201).json(user);
-    } catch (err) {
-        console.log(err, 'catch')
-        if (err[0] != undefined) {
-            for (i in err.errors) {
-                res.status(422).send(err.errors[i].message);
-            }
-        } else {
-            res.status(500).send({ error: err.name });
-        }
+    const { error } = schema.validate(req.body);
+    const errors = {};
+    if (error) {
+      console.log(error.details);
+      for (let err of error.details) {
+        errors[err.path[0]] = err.message.replace(/"/g, "");
+      }
     }
-}
 
-exports.login = async (req, res) => {
-    try {
-        const schema = Joi.object()
-            .options({ abortEarly: false })
-            .keys({
-                email: Joi.string().required().label("Email"),
-                password: Joi.string().required().min(6).label("Password")
-            })
-            .unknown(true);
+    if (error)
+      return res
+        .status(422)
+        .json(helper.response({ status: 422, error: errors }));
+    const { input, result } = req.body;
 
-        const { error } = schema.validate(req.body);
-        const errors = {};
-        if (error) {
-            for (let err of error.details) {
-                errors[err.path[0]] = err.message.replace(/"/g, "");
-            }
-        }
+    const user = await User.create({
+      input: input, // sanitize: convert email to lowercase
+      result: result,
+    });
 
-        if (error)
-            return res
-                .status(422)
-                .json(helper.response({ status: 422, error: errors }));
-
-
-        // Get user input
-        const { email, password } = req.body;
-
-        // Validate user input
-        if (!(email && password)) {
-            res.status(400).send("All input is required");
-        }
-        // Validate if user exist in our database
-        const user = await User.findOne({ email });
-
-        if (user && (await bcrypt.compare(password, user.password))) {
-        let payload = _.pick(user, ["_id", "firstName", "lastName", "email", "mobileNumber", "status"]);
-
-            // Create token
-            const token = user.generateAuthToken(payload);
-            const refreshToken = user.generateRefreshToken(payload);
-
-            // save user token
-            user.token = token;
-
-            // user
-            res.status(200).json(user);
-        } else {
-            res.status(400).send("Invalid Credentials");
-        }
-    } catch (err) {
-        console.log(err);
-        if (err[0] != undefined) {
-            for (i in err.errors) {
-                res.status(422).send(err.errors[i].error);
-            }
-        } else {
-            res.status(500).send({ error: err.name });
-        }
+    res.status(201).json(user);
+  } catch (err) {
+    console.log(err, "catch");
+    if (err[0] != undefined) {
+      for (i in err.errors) {
+        res.status(422).send(err.errors[i].message);
+      }
+    } else {
+      res.status(500).send({ error: err.name });
     }
-}
+  }
+};
 
-exports.getProfile = async (req, res) => {
-    try {
-        let userData = await User.findOne({ _id: req.user._id });
-        const data = userData;
-        const response = helper.response({
-            message: "Profile Fetched Successcully",
-            data,
-        });
-        return res.status(response.statusCode).json(response);
-    } catch (error) {
-        console.log(err);
-        if (err[0] != undefined) {
-            for (i in err.errors) {
-                return res.status(422).json(err.errors[i].message);
-            }
-        } else {
-            return res.status(422).json(err);
-        }
-    }
-}
+exports.getdata = async (req, res) => {
+  try {
+    if (!req.query.length) req.query.length = 10;
+    else req.query.length = parseInt(req.query.length);
+    if (!req.query.page) req.query.page = 1;
+    else req.query.page = parseInt(req.query.page);
+    let skip = req.query.page * req.query.length - req.query.length;
+    let result = await db._get(User, null, null, {
+      limit: req.query.length,
+      skip: skip,
+    });
+    let count = await db._count(result);
+
+    const response = helper.response({
+      data: helper.paginate(req, result, count),
+    });
+    return res.status(response.statusCode).json(response);
+  } catch (err) {
+    console.log(err);
+  }
+};
